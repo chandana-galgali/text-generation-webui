@@ -4,10 +4,6 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 import torch
-from torch.nn import CrossEntropyLoss
-from transformers import GenerationConfig, PretrainedConfig, PreTrainedModel
-from transformers.modeling_outputs import CausalLMOutputWithPast
-
 from exllamav2 import (
     ExLlamaV2,
     ExLlamaV2Cache,
@@ -18,6 +14,15 @@ from exllamav2 import (
     ExLlamaV2Cache_TP,
     ExLlamaV2Config
 )
+from torch.nn import CrossEntropyLoss
+from transformers import (
+    GenerationConfig,
+    GenerationMixin,
+    PretrainedConfig,
+    PreTrainedModel
+)
+from transformers.modeling_outputs import CausalLMOutputWithPast
+
 from modules import shared
 from modules.logging_colors import logger
 
@@ -28,7 +33,7 @@ except Exception:
     traceback.print_exc()
 
 
-class Exllamav2HF(PreTrainedModel):
+class Exllamav2HF(PreTrainedModel, GenerationMixin):
     def __init__(self, config: ExLlamaV2Config):
         super().__init__(PretrainedConfig())
         self.ex_config = config
@@ -157,6 +162,9 @@ class Exllamav2HF(PreTrainedModel):
         else:
             self.past_seq = seq_tensor
 
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+
         loss = None
         if labels is not None:
             # Shift so that tokens < n predict n
@@ -184,7 +192,7 @@ class Exllamav2HF(PreTrainedModel):
         config.model_dir = str(pretrained_model_name_or_path)
         config.prepare()
 
-        config.max_seq_len = shared.args.max_seq_len
+        config.max_seq_len = shared.args.ctx_size
         config.scale_pos_emb = shared.args.compress_pos_emb
         config.scale_alpha_value = shared.args.alpha_value
         config.no_flash_attn = shared.args.no_flash_attn
